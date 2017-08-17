@@ -1,3 +1,3 @@
 # Webvr-Shooting-Game
 
-http://recordit.co/pdJBAncpHk
+http://g.recordit.co/pdJBAncpHk.gif
