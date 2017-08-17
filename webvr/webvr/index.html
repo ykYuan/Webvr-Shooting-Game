@@ -1,0 +1,1177 @@
+<html>
+  <head>
+    <title>Webvr game</title>
+    <script src="https://aframe.io/releases/0.5.0/aframe.min.js"></script>
+    <script src="jquery-3.2.1.min.js"></script>
+    <p id="score">Score: 0</p>
+    
+      <style type="text/css">
+
+      body {
+        position: absolute;
+        background-color: white;
+        margin: 0px;
+        overflow: hidden;
+        font-family:Monospace;
+        font-size:13px;
+        text-align:center;
+        font-weight: bold;
+        text-align:center;
+      }
+
+      #timer {
+        color: white;
+        font-size: 25;
+        text-align: center;
+        vertical-align: middle;
+        width: 100%;
+        line-height: 1000px;
+        top: 30px;
+        position: absolute;
+        display: none;
+      }
+
+      #waiting_screen {
+        color: white;
+        font-size: 25;
+        text-align: center;
+        vertical-align: middle;
+        width: 100%;
+        top: 1000px;
+        line-height: 300px;
+        top: 30px;
+        position: absolute;
+      }
+
+      #admin_screen {
+        color: white;
+        font-size: 25;
+        text-align: center;
+        vertical-align: middle;
+        width: 100%;
+        line-height: 1000px;
+        top: 30px;
+        position: absolute;
+        display: none;
+      }
+
+      #player_name {
+        color: white;
+        font-size: 15;
+        top: 40;
+        position: absolute;
+      }
+
+      #scoreboard {
+        text-align: center;
+        vertical-align: middle;
+        color: white;
+        font-size: 15;
+        top: 30%;
+        left: 40%;
+        position: absolute;
+        display: none;
+      }
+
+
+      #time_remaining {
+        text-align: center;
+        vertical-align: middle;
+        color: white;
+        font-size: 15;
+        top: 2%;
+        left: 90%;
+        position: absolute;
+      }
+
+
+      #live_leaderboard {
+        text-align: center;
+        vertical-align: middle;
+        color: white;
+        font-size: 15;
+        top: 70%;
+        left: 91%;
+        position: absolute;
+      }
+
+      
+
+      p {
+        color: white;
+        position: absolute;
+        text-decoration: : white;
+      }
+
+    </style>
+    
+  </head>
+  <body>
+
+
+    <div id = "timer">Timer:</div>
+
+    <div id = "waiting_screen">
+      Game Loading...
+    </div>
+
+    <div id = "admin_screen">
+      Start
+    </div>
+
+    <div id = "player_name">Your name is: </div>
+
+    <div id = "scoreboard">
+      <ul id = "first"> First:    Score:</ul>
+      <ul id= "second"> Second:    Score:</ul>
+      <ul id = "third"> Third:    Score</ul>
+    </div>
+
+    <div id = "time_remaining"> Time Left:</div>
+   
+    <div id = "live_leaderboard"> Player scores
+
+
+  
+
+
+    </div>
+   
+   
+    <script src="three.js"></script>
+    <script src="controls.js"></script>
+    <script src="SPE.min.js"></script>
+    <script src="threex.laserbeam.js"></script>
+    <script src="socket.io.js"></script>
+    
+
+    <script>
+
+    /****
+
+    Some global variables that determine the current state of the game
+
+    *****/
+
+    var is_admin = false;
+    var game_start = false;
+    var game_end = false;
+    var player_name;
+    var top_three_loaded = false;
+    var top_three;
+    var time_remaining = 20;
+
+ 
+
+
+    /****
+
+    This part of the code deals with the timer on the top-right side 
+
+    *****/
+
+    //Timer code
+
+    document.getElementById("time_remaining").innerHTML = "Time left: " + time_remaining;
+
+    function time_remaining_start() {
+       setInterval(function() {
+        if (time_remaining == 0) {
+          game_end = true;
+          clearInterval(this);
+        }
+        else {
+          time_remaining--;
+          document.getElementById("time_remaining").innerHTML = "Time left: " + time_remaining;
+        }
+      }, 1000);
+    }
+
+
+   
+
+
+
+
+    /****
+
+    This part of the code deals with communicating with the backend
+
+    *****/
+
+    //Note that only retrieves the top three highest scores when the game ends
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+      if (this.readyState == 4 && this.status == 200) {
+        var response = JSON.parse(xhttp.responseText);
+          if (response.admin) {
+            console.log("Admin received!!");
+            document.getElementById("player_name").innerHTML = "Your name is: " + response.username;
+            player_name = response.username;
+            is_admin = true;
+          }
+          else if (response.player) {
+            console.log("Received unique user name " + response.username);
+            document.getElementById("player_name").innerHTML = "Your name is: " + response.username;
+            player_name = response.username;
+          }
+      }
+    };
+
+
+
+
+  //Whenever a user enters the game, the following code is executed once
+  //xhttp.open("GET", "https://experience.wearefx.uk/enter", true);
+  xhttp.open("GET", "http://localhost:8081/enter", true);
+  xhttp.send();
+
+  //var socket = io('https://experience.wearefx.uk');
+  var socket = io("http://localhost:8081");
+
+
+  //The following code deals with when the user is leaving a page; in this case an xttp request is sent to server saying that a user disconnects(only matters if its the admin)
+  window.onbeforeunload = function(e) {
+    if (is_admin) {
+      if (socket.connected) {
+        //xhttp.open("GET", "https://experience.wearefx.uk/admin_disconnect", true);
+        xhttp.open("GET", "http://localhost:8081/admin_disconnect", true);
+        xhttp.send();
+        socket.disconnect(true);
+      }
+    }
+    else {
+      if (socket.connected) {
+        socket.disconnect(true);
+      }
+    }
+  }
+
+  //This part checks if the admin_screen has been clicked; if it has been, emit an event to the server to tell the server that the game should now begin
+  var admin_screen_start = document.getElementById("admin_screen");
+  admin_screen_start.onclick = function() {
+    socket.emit("ready");
+    document.getElementById("admin_screen").style.display = "none";
+  }
+
+  
+  //The signal signifies that the game has started
+  socket.on("signal", function(data) {
+    console.log("And now the game " + data);
+    document.getElementById("waiting_screen").style.display = "none";
+    document.getElementById("admin_screen").style.display = "none";
+    setTimeout(function() {
+      game_start = true;
+    }, 3100);
+    start_timer();
+    time_remaining_start();
+    leaderboard_begin();
+    
+  });
+
+  //This is when the final results for the finishing scoreboard is in
+  socket.on("results", function(data) {
+    console.log("this is final data: " + JSON.parse(data).highest);
+    var ranks = JSON.parse(data).highest;
+    top_three = ranks;
+    top_three_loaded = true;
+    document.getElementById("scoreboard").style.display = "inline";
+    document.getElementById("first").innerHTML = "First: " + ranks[0].name + " Score: " + ranks[0].score;
+    if (ranks[1]) {
+      document.getElementById("second").innerHTML = "Second: " + ranks[1].name + " Score: " + ranks[1].score;
+    }
+    if (ranks[2]) {
+      document.getElementById("third").innerHTML = "Third: " + ranks[2].name + " Score: " + ranks[2].score;
+    }
+    socket.disconnect(true);
+  });
+  
+  
+
+  //Helper function that deals with the 3, 2, 1 timer; called when socket receives a "signal" event
+  function start_timer() {
+    document.getElementById("timer").style.display = "inline";
+    document.getElementById("timer").innerHTML = "3";
+    setTimeout(function() {
+      document.getElementById("timer").innerHTML = "2";
+      setTimeout(function() {
+        document.getElementById("timer").innerHTML = "1";
+        setTimeout(function() {
+          document.getElementById("timer").innerHTML = "0";
+          document.getElementById("timer").style.display = "none";
+        }, 1000);
+      }, 1000);
+    }, 1000);
+  }
+
+
+  //The following code deals with live-updating the leaderboard in the bottom right corner
+
+  //This function is called once the admin has pressed start
+  function leaderboard_begin() {
+      console.log("game still going");
+      setInterval(function() {
+        socket.emit("liveScoreUpdate", JSON.stringify({name: player_name, score: score}));
+      }, 1000);
+  }
+
+  //Gets the current live score data from the server
+  socket.on("liveScoreUpdateResults", function(data) {
+    for (var i = 0; i < data.length; i++) {
+      var up = 70 + 2 * (i + 1);
+      var name = "#" + data[i].name.replace(" ", "");
+      console.log("live update data: " + data[i].name);
+      document.getElementById(data[i].name.replace(" ", "")).innerHTML = data[i].name + " score: " + data[i].score;
+      $(name).animate({top: up + '%', left: '91%'});
+    }
+  });
+
+
+  //Called when the admin presses start, creates the div elements inside the live scoreboard
+  socket.on("allPlayersInfo", function(data) {
+    var info = data;
+    var leaderboard = document.getElementById("live_leaderboard");
+    var base = 70;
+    for (var i = 0; i < info.length; i++) {
+      base = base + 2;
+      var div = document.createElement('div');
+      div.id = data[i].name.replace(" ", "");
+      div.innerHTML = data[i].name + " score: " + data[i].score;
+      div.style.position = "absolute";
+      div.style.color = "white";
+      div.style.top = base + "%";
+      div.style.left = "91%";
+      document.body.appendChild(div);
+    }
+  });
+
+
+
+  socket.on("admin_disconnect", function(data) {
+    socket.disconnect();
+  });
+
+
+
+
+
+    /****
+
+    Initiate game specific variables (Score)
+
+    *****/
+
+    var score = 0;
+  
+    /****
+
+    Initiate scene, camera, rederer
+
+    *****/
+      
+
+      var scene = new THREE.Scene();
+      var camera = new THREE.PerspectiveCamera( 75, window.innerWidth/window.innerHeight, 0.1, 1000 );
+
+      var renderer = new THREE.WebGLRenderer();
+      renderer.setSize( window.innerWidth, window.innerHeight );
+      document.body.appendChild( renderer.domElement );
+
+
+      // variable that determines whether to change camera rotation based on keyboard events
+      var toggle = false;
+
+
+
+    /****
+
+    Creates a cube. Though this cube is not directly shown in the scene, it is used by the create_track() function for figuring out the x, y, z coordinates of where the track should 
+    lookat
+
+    *****/
+
+
+      var geometry = new THREE.BoxGeometry( 1, 1, 1 );
+      var material = new THREE.MeshPhongMaterial( { color: 0xdddddd, specular: 0x009900, shininess: 30, shading: THREE.FlatShading } );
+      var cube = new THREE.Mesh( geometry, material );
+     
+
+
+    /****
+
+    Setting up for orbit controls; this parts lets the user move the screen around when dragging
+
+    *****/
+
+      
+
+      var controls;
+      controls = new THREE.OrbitControls( camera, renderer.domElement );
+      window.addEventListener( 'resize', onWindowResize, false );
+
+    /****
+
+    Creates raycaster for collision detection
+
+    *****/
+      var ray = new THREE.Raycaster();
+
+    /****
+
+    Creates meandering train tracks using tubeGeometry
+
+    *****/
+      var points = [];
+      points.push(new THREE.Vector3(-50, -5, 15));
+      points.push(new THREE.Vector3(-40, -2, 5));
+      points.push(new THREE.Vector3(-30, 0, 0));
+      points.push(new THREE.Vector3(-20, 0.1, 0));
+      points.push(new THREE.Vector3(-10, 0, 0));
+      points.push(new THREE.Vector3(0, 0, 0));
+      points.push(new THREE.Vector3(10, 10, 0));
+      points.push(new THREE.Vector3(20, 20, 0));
+      points.push(new THREE.Vector3(30, 16, 0));
+      points.push(new THREE.Vector3(40, 10, 0));
+      points.push(new THREE.Vector3(50, 15, -17));
+      points.push(new THREE.Vector3(69, 25, -30));
+      points.push(new THREE.Vector3(80, 20, -5));
+      points.push(new THREE.Vector3(100, 30, -5));
+      points.push(new THREE.Vector3(110, 25, -10));
+      points.push(new THREE.Vector3(120, 23, -5));
+      points.push(new THREE.Vector3(130, 23, 0));
+      points.push(new THREE.Vector3(140, 30, 5));
+      points.push(new THREE.Vector3(150, 40, 15));
+      points.push(new THREE.Vector3(155, 40, 25));
+      points.push(new THREE.Vector3(160, 35, 35));
+      points.push(new THREE.Vector3(180, 40, 40));
+      points.push(new THREE.Vector3(200, 45, 40));
+      points.push(new THREE.Vector3(220, 50, 40));
+      points.push(new THREE.Vector3(240, 55, 40));
+
+      var tube_curve = new THREE.CatmullRomCurve3(points);
+      tube_curve.x = -100;
+      tube_curve.y = -100;
+      tube_curve.z = -100;
+      
+     
+
+
+
+
+    /****
+
+    Create small circle that appears in the center of the camera
+
+    *****/
+
+    var circle_geometry = new THREE.RingGeometry( 0.02, 0.022, 8, 8, 0, Math.PI * 2 );
+    var circle_material = new THREE.MeshBasicMaterial( { color: 0xffffff} );
+    var circle = new THREE.Mesh( circle_geometry, circle_material );
+    scene.add(camera);
+    camera.add(circle);
+    circle.position.set(0, 0, -1);
+
+
+    ring_geometry = new THREE.RingGeometry(0.0001, 0.02, 8, 8, 0, Math.PI * 2);
+    ring_material = new THREE.MeshBasicMaterial( { color: 0xffff00, side: THREE.DoubleSide } );
+    ring = new THREE.Mesh( ring_geometry, ring_material );
+    ring.position.set(0, 0, -1);
+    camera.add(ring);
+    ring_collide = true;
+
+
+
+
+
+    
+
+        
+
+    var loader = new THREE.TextureLoader();
+    loader.load('space.jpg', function(texture) {
+      var spacesphereGeo = new THREE.SphereGeometry(350, 350, 350);
+      var spacesphereMat = new THREE.MeshPhongMaterial();
+      spacesphereMat.map = texture;
+
+
+      var spacesphere = new THREE.Mesh(spacesphereGeo,spacesphereMat);
+      
+      //spacesphere needs to be double sided as the camera is within the spacesphere
+      spacesphere.material.side = THREE.DoubleSide;
+      
+      spacesphere.material.map.wrapS = THREE.RepeatWrapping; 
+      spacesphere.material.map.wrapT = THREE.RepeatWrapping;
+      spacesphere.material.map.repeat.set( 5, 3);
+      scene.add(spacesphere);
+    });
+    //Space background is a large sphere
+      
+    //create two spotlights to illuminate the scene
+      var spotLight = new THREE.SpotLight( 0xffffff ); 
+      spotLight.position.set( -500, -500, -1000 ); 
+      spotLight.intensity = 2;
+      spotLight.rotation.z = Math.PI;
+      scene.add( spotLight );
+
+      var spotLight2 = new THREE.SpotLight( 0x5192e9 ); 
+      spotLight2.position.set( 500, 500, 1000 ); 
+      spotLight2.intensity = 1.5;
+      scene.add( spotLight2 );
+
+
+   
+
+
+
+
+      //The following are variables declared for rendering the explosion effect
+      var geometry;
+      var particles = 10000;
+      var particleSystem;
+      var uniforms;
+
+      var group = new SPE.Group( {
+          texture: {
+            value: THREE.ImageUtils.loadTexture( 'sprite-explosion2.png' ),
+            frames: new THREE.Vector2( 5, 5 ),
+            loop: 1
+          },
+          depthTest: true,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+          scale: 600
+        } ),
+        shockwaveGroup = new SPE.Group( {
+          texture: {
+            value: THREE.ImageUtils.loadTexture( 'smokeparticle.png' ),
+          },
+          depthTest: false,
+          depthWrite: true,
+          blending: THREE.NormalBlending,
+        } ),
+        shockwave = new SPE.Emitter( {
+          particleCount: 20,
+          type: SPE.distributions.DISC,
+          position: {
+            radius: 5,
+            spread: new THREE.Vector3( 16 )
+          },
+          maxAge: {
+            value: 2,
+            spread: 0
+          },
+          // duration: 1,
+          activeMultiplier: 2000,
+          velocity: {
+            value: new THREE.Vector3( 5 )
+          },
+          rotation: {
+            axis: new THREE.Vector3( 1, 0, 0 ),
+            angle: Math.PI * 0.25,
+            static: true
+          },
+          size: { value: 5 },
+          color: {
+            value: [
+              new THREE.Color( 0.4, 0.2, 0.1 ),
+              new THREE.Color( 0.2, 0.2, 0.2 )
+            ]
+          },
+          opacity: { value: [0.5, 0.2, 0] }
+        }),
+        debris = new SPE.Emitter( {
+          particleCount: 100,
+          type: SPE.distributions.SPHERE,
+          position: {
+            radius: 0.1,
+          },
+          maxAge: {
+            value: 2
+          },
+          // duration: 2,
+          activeMultiplier: 40,
+          velocity: {
+            value: new THREE.Vector3( 100 )
+          },
+          acceleration: {
+            value: new THREE.Vector3( 0, -2, 0 ),
+            distribution: SPE.distributions.BOX
+          },
+          size: { value: 5 },
+          drag: {
+            value: 1
+          },
+          color: {
+            value: [
+              new THREE.Color( 1, 1, 1 ),
+              new THREE.Color( 1, 1, 0 ),
+              new THREE.Color( 1, 0, 0 ),
+              new THREE.Color( 0.4, 0.2, 0.1 )
+            ]
+          },
+          opacity: { value: [0.4, 0] }
+        }),
+        fireball = new SPE.Emitter( {
+          particleCount: 20,
+          type: SPE.distributions.SPHERE,
+          position: {
+            radius: 1
+          },
+          maxAge: { value: 2 },
+          // duration: 1,
+          activeMultiplier: 20,
+          velocity: {
+            value: new THREE.Vector3( 1 )
+          },
+          size: { value: [20, 10] },
+          color: {
+            value: [
+              new THREE.Color( 0.5, 0.1, 0.05 ),
+              new THREE.Color( 0.2, 0.2, 0.2 )
+            ]
+          },
+          opacity: { value: [0.5, 0.35, 0.1, 0] }
+        }),
+        mist = new SPE.Emitter( {
+          particleCount: 50,
+          position: {
+            spread: new THREE.Vector3( 10, 10, 10 ),
+            distribution: SPE.distributions.SPHERE
+          },
+          maxAge: { value: 2 },
+          // duration: 1,
+          activeMultiplier: 2000,
+          velocity: {
+            value: new THREE.Vector3( 8, 3, 10 ),
+            distribution: SPE.distributions.SPHERE
+          },
+          size: { value: 40 },
+          color: {
+            value: new THREE.Color( 0.2, 0.2, 0.2 )
+          },
+          opacity: { value: [0, 0, 0.2, 0] }
+        }),
+        flash = new SPE.Emitter( {
+          particleCount: 100,
+          position: { spread: new THREE.Vector3( 1, 1, 1 ) },
+          velocity: {
+            spread: new THREE.Vector3( 30 ),
+            distribution: SPE.distributions.SPHERE
+          },
+          size: { value: [2, 20, 20, 20] },
+          maxAge: { value: 2 },
+          activeMultiplier: 2000,
+          opacity: { value: [0.5, 0.25, 0, 0] }
+        } );
+      group.addEmitter( fireball ).addEmitter( flash );
+      shockwaveGroup.addEmitter( debris ).addEmitter( mist );
+
+
+      //Testing new particle system
+      var emitter, particleGroup
+      particleGroup = new SPE.Group({
+            texture: {
+                    value: THREE.ImageUtils.loadTexture('smokeparticle.png')
+                }
+          });
+
+          emitter = new SPE.Emitter({
+                maxAge: {
+                    value: 2
+                },
+            position: {
+              //300 ,55, 40
+                    value: new THREE.Vector3(0 ,0, -20),
+                    spread: new THREE.Vector3( 170, 170, 170 )
+                },
+
+            acceleration: {
+                    value: new THREE.Vector3(0, 0, 100),
+                    spread: new THREE.Vector3( 10, 0, 10 )
+                },
+
+            velocity: {
+                    value: new THREE.Vector3(0, 0, 2),
+                    spread: new THREE.Vector3(10, 7.5, 10)
+                },
+
+                color: {
+                    value: [ new THREE.Color('white'), new THREE.Color('white') ]
+                },
+
+                size: {
+                    value: 1
+                },
+
+            particleCount: 10000
+          });
+          particleGroup.mesh.dynamic = true;
+          particleGroup.addEmitter( emitter );
+          camera.add( particleGroup.mesh );
+
+
+    //The following are code for the laser beam
+    var laserBeam = new THREEx.LaserBeam();
+    laserBeam.object3d.position.z = -5;
+    laserBeam.object3d.scale.set(5, 4, 5);
+    laserBeam.object3d.rotation.z = Math.PI * 1.5;
+    laserBeam.object3d.rotation.x = Math.PI / 0.660;
+
+
+    //The following code deals with the fog effect
+    //scene.fog = new THREE.Fog(0xeee, 1, 600);
+
+
+
+
+    /****
+
+    Main logic goes here; Note: render() function at the bottom
+
+    *****/
+
+      
+      var obey;
+
+
+
+
+      function init() {
+        renderer.shadowMap.enabled = true;
+        train_track_block();
+        
+        var asteroids = createAsteroids();
+        for (var i = 0; i < asteroids.length -1; i++) {
+          scene.add(asteroids[i]);
+        };
+
+        
+
+      }
+
+
+      function onWindowResize() {
+
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+
+        renderer.setSize( window.innerWidth, window.innerHeight );
+
+
+      }
+
+
+
+      function animate() {
+
+        controls.update(); // required if controls.enableDamping = true, or if controls.autoRotate = true
+
+        requestAnimationFrame( animate );
+
+        render();
+
+      }
+
+
+     
+
+
+
+
+
+      camera.position.x = 0;
+      camera.position.y = 0;
+      camera.position.z = 10;
+
+      
+
+
+
+      //Variables that store the rotation information of the camera
+      var pt;
+      var radians;
+      var tangent;
+      var axis = new THREE.Vector3();
+      var up = new THREE.Vector3( 0, 0, -1 );
+      var t = 0;
+      var lookAt = new THREE.Vector3();
+
+
+      init();
+      render(); 
+      animate();
+      create_track();
+
+      var particle_count = 0;
+
+
+      //The following variables are for the cursor in the center
+      var ring_collide = false;
+      var time_up = false;
+      var timer = 6.3;
+      var ring;
+      var ring_geometry;
+      var ring_material;
+
+      
+
+
+      //The following variables are needed for the explosion effect
+      var is_exploding = false;
+      var exploding_object;
+      var exploding_time = 0;
+
+      //variable used to display admin screen only once
+      var admin_screen_display_once = true;
+
+      //variable that meant posting score to the server only once
+      var post_server_only_once = true;
+      var get_highest_score_only_once = true;
+
+      function render() {
+        if (game_end) {
+          console.log("The game now ends");
+          if (post_server_only_once) {
+            console.log("Posting scores here");
+            socket.emit("postScore", JSON.stringify({name: player_name, score: score}));
+
+            post_server_only_once = false;
+          }
+          particleGroup.tick();
+          renderer.render( scene, camera );
+        }
+        else if (game_start) {          
+          //Updates explosion effect and particle effect
+          group.tick();
+          shockwaveGroup.tick();
+          particleGroup.tick();
+          
+          
+
+          // Get the vector of the point along the curve corresponding to the t value
+          pt = tube_curve.getPoint(t);
+            
+          // get the tangent to the curve
+          tangent = tube_curve.getTangent(t).normalize();
+          tangent.x = - tangent.x;
+          tangent.y = - tangent.y;
+          tangent.z = - tangent.z;
+            
+          // calculate the axis to rotate around
+          axis.crossVectors(up, tangent);
+            
+          // calcluate the angle between the up vector and the tangent
+          radians = Math.acos(up.dot(tangent));
+                
+          // set the quaternion
+          if (!toggle) {
+            camera.lookAt(lookAt.copy(camera.position).sub(tangent));
+          }
+             
+          camera.position.x = pt.x;
+          camera.position.y = pt.y + 4;
+          camera.position.z = pt.z;
+
+          //t = 1 signals the end of the track, and the game will thus stop
+          if (t >= 1) {
+            game_end = true;  
+          } 
+          //0.0002
+          t = (t >= 1) ? 0 : t += 0.0002;
+
+
+          // Collision detection using raycaster
+          ray.setFromCamera(new THREE.Vector2(), camera);
+          var intersects = ray.intersectObjects( scene.children );
+
+          //The following iterates through all the intersecting objects
+          for ( var i = 0; i < intersects.length; i++ ) {
+
+            if (intersects[i].object.name === "asteroid") {
+              camera.add(laserBeam.object3d);
+
+              /****
+
+              Create ring geometry that represents a countdown when laster intersection with an asteroid
+
+              *****/
+              if (!ring_collide) {
+                //Creates the ring and set ring_collide to true
+                ring_geometry = new THREE.RingGeometry(0.0001, 0.02, 8, 8, 0, Math.PI * 2);
+                ring_material = new THREE.MeshBasicMaterial( { color: 0xffff00, side: THREE.DoubleSide } );
+                ring = new THREE.Mesh( ring_geometry, ring_material );
+                ring.position.set(0, 0, -1);
+                camera.add(ring);
+                ring_collide = true;
+              }
+              else {
+                //When cursor is hitting an asteroid
+                if (!time_up) {
+                  //When it is not time up yet
+                  var new_radius = timer - 0.1;
+                  camera.remove(ring);
+                  ring_geometry.dispose();
+                  ring_material.dispose();
+                  ring_geometry = new THREE.RingGeometry(0.0001, 0.02, 8, 8, 0, new_radius);
+                  ring_material = new THREE.MeshBasicMaterial( { color: 0x228B22, side: THREE.DoubleSide } );
+                  ring = new THREE.Mesh( ring_geometry, ring_material );
+                  ring.position.set(0, 0, -1);
+                  camera.add(ring);
+                  ring_collide = true;
+                  timer = timer - 0.1;
+                  if (timer <= 0) {
+                    time_up = true;
+                  }
+                }
+                else {
+                  //This is when the astroid has been destroyed by the laser beam
+                  score++;
+                  document.getElementById("score").innerHTML = "Score: " + score;
+                  timer = 6.3;
+                  exploding_object = intersects[i].object;
+                  scene.remove(intersects[i].object);
+                  group.mesh.position.x = intersects[i].object.position.x;
+                  group.mesh.position.y = intersects[i].object.position.y;
+                  group.mesh.position.z = intersects[i].object.position.z;
+                  shockwaveGroup.mesh.position.x = intersects[i].object.position.x;
+                  shockwaveGroup.mesh.position.y = intersects[i].object.position.y;
+                  shockwaveGroup.mesh.position.z = intersects[i].object.position.z;
+                  scene.add(group.mesh);
+                  scene.add(shockwaveGroup.mesh);
+                  setTimeout(function() {
+                    scene.remove(group.mesh);
+                    scene.remove(shockwaveGroup.mesh);
+                  }, 300);
+
+                }
+                  
+              }
+              break;
+            }
+            else {
+              //This is when the cursor is not intersecting with any of the asteroids on the screen
+              camera.remove(ring);
+              ring_collide = false;
+              time_up = false;
+              timer = 6.3;
+              camera.remove(laserBeam.object3d);
+              break;
+            }
+
+          }
+
+          //composer.render();
+     
+          renderer.render( scene, camera );
+
+          
+        }
+
+
+        else if (!game_start && !is_admin) {
+          //This is when the game is in loading screen
+          //camera.rotation.y = Math.PI / 2;
+          particleGroup.tick();
+          renderer.render( scene, camera );
+        }
+        else if (!game_start && is_admin) {
+          //This is when admin is in loading screen
+          document.getElementById("waiting_screen").style.display = "none";
+          if (admin_screen_display_once) {
+            document.getElementById("admin_screen").style.display = "inline";
+            admin_screen_display_once = false;
+          }
+          particleGroup.tick();
+          renderer.render( scene, camera );
+        }
+
+
+
+        
+      }
+
+      window.requestAnimationFrame(render);
+
+    /****
+
+    Helper Functions area
+
+    *****/
+
+
+
+      //Normally without mousedown, the camera moves along the track      
+      window.addEventListener('mousedown', function(e){
+        toggle = true;
+      })
+      
+
+      //Helper function that creates a single train track given the x, y, z coordinates
+      function create_track() {
+        var points = tube_curve.getSpacedPoints(167);
+        for (var i = 0; i < 167; i++) {
+          var pt = points[i];
+          var tangent = tube_curve.getTangentAt(0.006 * i).normalize();
+
+          var up = new THREE.Vector3(0, 0, 1);
+          var axis = new THREE.Vector3();
+          axis.crossVectors(up, tangent).normalize();
+          cube.lookAt(lookAt.copy(axis));
+
+          var copy = obey.clone();
+          if (axis.x == 0 && axis.y == 0) {
+            copy.lookAt(lookAt.copy(tangent));
+          } else {
+            copy.lookAt(lookAt.copy(axis)); 
+          }
+
+          copy.position.x = pt.x;
+          copy.position.y = pt.y;
+          copy.position.z = pt.z;
+
+          scene.add(copy);
+        }
+
+      }
+
+      //Helper function that creates a single track on the scene
+
+    function train_track_block() {
+
+      var parent = new THREE.Object3D();
+
+      var extrudeSettings = {
+          bevelEnabled: false,
+          bevelSegments: 0,
+          steps: 20,
+          amount: 5
+      };
+      var extrudeSettings2 = {
+          bevelEnabled: true,
+          bevelThickness: 3.0,
+          bevelSize: 1,
+          bevelSegments: 10,
+          steps: 20,
+          amount: 50
+      };
+
+      //Exported Paths from Illustrator 
+      var outline1 = new THREE.Shape();
+      outline1.moveTo(0.5, 13.5);
+      outline1.lineTo(15.3, 0.5);
+      outline1.lineTo(57.0, 0.5);
+      outline1.lineTo(78.4, 13.5);
+      outline1.lineTo(162.9, 13.5);
+      outline1.lineTo(184.3, 0.5);
+      outline1.lineTo(226.0, 0.5);
+      outline1.lineTo(240.8, 13.5);
+      outline1.lineTo(240.8, 40.5);
+      outline1.lineTo(226.0, 49.8);
+      outline1.lineTo(15.3, 49.8);
+      outline1.lineTo(0.5, 40.5);
+      outline1.lineTo(0.5, 13.5);
+      
+
+
+      function initiate() {
+          scene.add(parent);
+          addShape(outline1, extrudeSettings, 0xffffff, 0, 0, 0, 0, 0, 0, 1);
+          parent.scale.multiplyScalar(.033);
+      }
+      
+
+      function addShape(shape, extrudeSettings, color, x, y, z, rx, ry, rz, s) {
+
+          var geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+          geometry.center();
+          parent = new THREE.Mesh(geometry, new THREE.MeshLambertMaterial({
+              color: color,
+              shading: THREE.FlatShading
+          }));
+
+          parent.position.set(x, y, z);
+          parent.rotation.set(rx, ry, rz);
+          parent.scale.set(s, s, s);
+
+      }
+      
+
+        initiate();
+        obey = parent;
+
+    }
+
+
+    //The following three helper function create the asteroids in space
+
+
+    function createAsteroids(){
+      var maxWidth = 1000;
+      var maxHeight = 200;
+      var maxDepth = 200;
+      var asteroids = [];
+
+      for(var i = 0; i < 160; i++){
+        asteroids.push(createRock(2+Math.random()*5,1000,maxWidth,150,800));
+      }
+      
+      return asteroids;
+    }
+
+
+    function createRock(size,spreadX,maxWidth,maxHeight,maxDepth){
+      var geometry = new THREE.DodecahedronGeometry(size, 1);
+      
+      geometry.vertices.forEach(function(v){
+        v.x += (0-Math.random()*(size/4));
+        v.y += (0-Math.random()*(size/4));
+        v.z += (0-Math.random()*(size/4));
+      })
+      var color = '#111111';
+      color = ColorLuminance(color,2+Math.random()*10);
+      texture = new THREE.MeshStandardMaterial({color:color,
+                                            shading: THREE.FlatShading,
+                                                roughness: 0.8,
+                                                metalness: 1
+                                            });
+
+      asteroid = new THREE.Mesh(geometry, texture);
+      asteroid.castShadow = true;
+      asteroid.receiveShadow = true;
+      asteroid.scale.set(1+Math.random()*0.4,1+Math.random()*0.8,1+Math.random()*0.4);
+
+      var x = spreadX/2-Math.random()*spreadX;
+      var centeredness = 1-(Math.abs(x)/(maxWidth/2));
+      var y = (maxHeight/2-Math.random()*maxHeight)*centeredness;
+      var z = (maxDepth/2-Math.random()*maxDepth)*centeredness;
+      asteroid.position.set(x,y,z);
+      asteroid.r = {};
+      asteroid.r.x = Math.random() * 0.005;
+      asteroid.r.y = Math.random() * 0.005;
+      asteroid.r.z = Math.random() * 0.005;
+      asteroid.name = "asteroid";
+      return asteroid;
+    };
+
+    function ColorLuminance(hex, lum) {
+      // validate hex string
+      hex = String(hex).replace(/[^0-9a-f]/gi, '');
+      if (hex.length < 6) {
+        hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+      }
+      lum = lum || 0;
+
+      // convert to decimal and change luminosity
+      var rgb = "#", c, i;
+      for (i = 0; i < 3; i++) {
+        c = parseInt(hex.substr(i*2,2), 16);
+        c = Math.round(Math.min(Math.max(0, c + (c * lum)), 255)).toString(16);
+        rgb += ("00"+c).substr(c.length);
+      }
+      return rgb;
+    }
+    
+    </script>
+  </body>
+</html>
