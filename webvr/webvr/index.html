@@ -90,7 +90,7 @@
         vertical-align: middle;
         color: white;
         font-size: 15;
-        top: 70%;
+        top: 60%;
         left: 91%;
         position: absolute;
       }
@@ -159,7 +159,7 @@
     var player_name;
     var top_three_loaded = false;
     var top_three;
-    var time_remaining = 20;
+    var time_remaining = 60;
 
  
 
@@ -878,7 +878,7 @@
             game_end = true;  
           } 
           //0.0002
-          t = (t >= 1) ? 0 : t += 0.0002;
+          t = (t >= 1) ? 0 : t += 0.0005;
 
 
           // Collision detection using raycaster
