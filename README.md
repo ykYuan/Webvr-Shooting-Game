@@ -1,3 +1,3 @@
 # Webvr-Shooting-Game
 
-![Alt Text](http://g.recordit.co/aw6A58PIX0.gif)
+![Alt Text](https://g.recordit.co/aw6A58PIX0.gif)
