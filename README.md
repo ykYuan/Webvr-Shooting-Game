@@ -21,6 +21,6 @@ Instructions:
 5. First player to enter game is admin; when admin presses start game starts for all the players
 6. Refresh page to start again
 
-Note: Multiplayer feature enabled but requires remote server to host the Node.js backend. For the single player version you can simply open mutiple windows.
+Note: Multiplayer feature enabled but requires remote server to host the Node.js backend. For the single player version you can simply open mutiple windows to test the multiplayer feature.
 
 
